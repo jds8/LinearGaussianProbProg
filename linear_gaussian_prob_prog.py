@@ -32,10 +32,8 @@ class GraphicalModel(dict):
             self.id_to_gaussian[self.next_id] = gaussian
             self.next_id += 1
 
-    def refer_to_same_gaussian(self, f, g):
-        return self[f].id == self[g].id
-
     def get_indices(self, prior, likelihood):
+        pass
 
 
 class Gaussian:
