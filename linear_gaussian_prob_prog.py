@@ -35,8 +35,7 @@ class GraphicalModel(dict):
     def refer_to_same_gaussian(self, f, g):
         return self[f].id == self[g].id
 
-    # I might have to add names in case newly instantiated LinearTransformations
-    # reference the same underlying Gaussian
+    def get_indices(self, prior, likelihood):
 
 
 class Gaussian:
@@ -92,7 +91,7 @@ class LinearTransformation(Gaussian):
         return linear_transform
 
 
-class LinearGaussian(Gaussian):
+class ConditionalGaussian(Gaussian):
     def __init__(
         self,
         gm: GraphicalModel,
@@ -116,7 +115,7 @@ class ConcatenatedGaussian(Gaussian):
     def __init__(
         self,
         gm: GraphicalModel,
-        f: LinearGaussian,
+        f: ConditionalGaussian,
         g: Gaussian,
         *args,
         **kwargs,
@@ -132,7 +131,7 @@ class ConcatenatedGaussian(Gaussian):
         self.f_dim = f.mean.shape[0]
         self.g_dim = g.mean.shape[0]
 
-    def compute_covariance(self, f: LinearGaussian, g: Gaussian):
+    def compute_covariance(self, f: ConditionalGaussian, g: Gaussian):
         variance = torch.zeros(self.f_dim + self.g_dim, self.f_dim + self.g_dim)
         variance[:self.f_dim, :self.f_dim] = f.covariance
         variance[self.f_dim:, self.f_dim:] = g.covariance
@@ -148,11 +147,12 @@ class ConcatenatedGaussian(Gaussian):
 def posterior(
     gm: GraphicalModel,
     prior: Gaussian,
-    likelihood: LinearGaussian
-) -> LinearGaussian:
+    likelihood: ConditionalGaussian
+) -> ConditionalGaussian:
     # prior: p(x|z)=N(Ax+d,Q)
     # likelihood: p(y∣x)=N(Cx+b,R)
-    assert gm.refer_to_same_gaussian(prior, likelihood.x)
+    # gets the indices of likelihood.x corresponding to prior
+    idx = gm.get_indices(prior, likelihood)
     # 1/Σ
     precision = torch.mm(
         torch.mm(
@@ -190,7 +190,7 @@ def posterior(
         # of the condition bar...
         temp = LinearTransformation(gm, A=y_scale, b=y_shift, x=likelihood, register=False)
 
-    # posterior_mean=μ=Σ(CR^{-1}(y+b)+Q^{−1}(Az+d))=Σ*temp
+    # posterior_mean=μ=Σ(CR^{-1}(y-b)+Q^{−1}(Az+d))=Σ*temp
     posterior_mean_wrt_temp = LinearTransformation(
         gm,
         A=covariance,
@@ -202,5 +202,5 @@ def posterior(
         gm,
         posterior_mean_wrt_temp.x
     )
-    output = LinearGaussian(gm, posterior_mean, covariance)
+    output = ConditionalGaussian(gm, posterior_mean, covariance)
     return output
